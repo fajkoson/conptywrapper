@@ -1,0 +1,17 @@
+function(version)
+    file(READ "${CMAKE_SOURCE_DIR}/version.txt" _version_raw)
+    string(STRIP "${_version_raw}" _version_clean)
+    string(REPLACE "." ";" _version_list "${_version_clean}")
+    list(GET _version_list 0 PROJECT_VERSION_MAJOR)
+    list(GET _version_list 1 PROJECT_VERSION_MINOR)
+    list(GET _version_list 2 PROJECT_VERSION_PATCH)
+
+    set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" PARENT_SCOPE)
+    set(PROJECT_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}" PARENT_SCOPE)
+    set(PROJECT_VERSION_MINOR "${PROJECT_VERSION_MINOR}" PARENT_SCOPE)
+    set(PROJECT_VERSION_PATCH "${PROJECT_VERSION_PATCH}" PARENT_SCOPE)
+endfunction()
+
+function(author)
+    set(AUTHOR "fajkoson" PARENT_SCOPE)
+endfunction()

@@ -1,0 +1,19 @@
+from setuptools import setup
+from setuptools.dist import Distribution
+
+class BinaryDistribution(Distribution):
+    def has_ext_modules(self):
+        return True
+
+setup(
+    name="pseudoconsole",
+    version="@PROJECT_VERSION@",
+    author="@AUTHOR@",
+    description="Windows ConPTY wrapper with Python bindings",
+    packages=["pseudoconsole"],
+    package_dir={"": "."},
+    package_data={"pseudoconsole": ["pseudoconsole.pyd"]},
+    include_package_data=True,
+    zip_safe=False,
+    distclass=BinaryDistribution,
+)

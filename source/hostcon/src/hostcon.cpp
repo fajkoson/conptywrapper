@@ -5,7 +5,7 @@
 #include <thread>
 #include <chrono>
 
-// Utility to trim trailing whitespace from a string
+// Utility: trim trailing whitespace from a string (for clean logs)
 static inline void trim_right(std::string& s) {
     auto pos = s.find_last_not_of(" \t\r\n");
     if (pos != std::string::npos)
@@ -14,34 +14,30 @@ static inline void trim_right(std::string& s) {
         s.clear();
 }
 
+// This function logs every new line printed to the Windows console buffer, in real-time, to a log file.
 void log_console_live(HANDLE hConsole, const std::string& logFile) {
     std::ofstream log(logFile);
     if (!log) {
-        std::cerr << "Failed to open log file!\n";
+        std::cerr << "Failed to open log file for writing!\n";
         return;
     }
 
-    // Get initial console buffer info
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     GetConsoleScreenBufferInfo(hConsole, &csbi);
 
-    // Start logging from the current bottom of buffer
     SHORT lastLoggedRow = csbi.dwCursorPosition.Y;
     const SHORT bufferHeight = csbi.dwSize.Y;
     const SHORT bufferWidth = csbi.dwSize.X;
-    DWORD charsRead = 0;
     CHAR* buffer = new CHAR[bufferWidth + 1];
 
     while (true) {
-        // Refresh buffer info to see cursor movement
         if (!GetConsoleScreenBufferInfo(hConsole, &csbi)) break;
         SHORT currentRow = csbi.dwCursorPosition.Y;
 
-        // Handle buffer wrap-around
+        // Log all new rows since last check
         while (lastLoggedRow != currentRow) {
             COORD readCoord = { 0, lastLoggedRow };
             DWORD charsRead = 0;
-            // Read the entire width of the console buffer row
             if (ReadConsoleOutputCharacterA(hConsole, buffer, bufferWidth, readCoord, &charsRead) && charsRead > 0) {
                 buffer[charsRead] = '\0';
                 std::string line(buffer);
@@ -51,42 +47,54 @@ void log_console_live(HANDLE hConsole, const std::string& logFile) {
                     log.flush();
                 }
             }
-            // Advance and wrap around if needed
             lastLoggedRow = (lastLoggedRow + 1) % bufferHeight;
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        // Optional: break early with ESC
-        if (GetAsyncKeyState(VK_ESCAPE)) break;
+        // This loop will run until the parent process closes the console or exits.
     }
     delete[] buffer;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc < 3) {
+        std::cerr << "Usage: hostcon.exe <logfile> <factorio_path> [args...]\n";
+        return 1;
+    }
     AllocConsole();
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
+    // First argument: log file path
+    std::string log_file = argv[1];
+
+    // Remaining arguments: Factorio command and its arguments
+    std::string cmd;
+    for (int i = 2; i < argc; ++i) {
+        if (i > 2) cmd += " ";
+        cmd += argv[i];
+    }
+
     STARTUPINFOA si = { sizeof(si) };
     PROCESS_INFORMATION pi;
-    std::string cmd = R"(d:\gamez\steamapps\common\Factorio\bin\x64\factorio.exe --benchmark benchmarks\0001-iron-smelter\iron_smelter_enable_clocked.zip --benchmark-ticks 5000 --disable-audio)";
+    char* cmdline = &cmd[0];
 
     BOOL ok = CreateProcessA(
-        NULL, &cmd[0], NULL, NULL, FALSE,
+        NULL, cmdline, NULL, NULL, FALSE,
         CREATE_NEW_CONSOLE,
         NULL, NULL, &si, &pi);
 
     if (!ok) {
-        std::cerr << "Failed to start Factorio\n";
+        std::cerr << "Failed to start Factorio (or target process)\n";
         return 1;
     }
 
-    // Start clean logger in background thread
-    std::thread logger([&]() { log_console_live(hConsole, "hostcon.log"); });
+    // Start logging in a background thread
+    std::thread logger([&]() { log_console_live(hConsole, log_file); });
 
+    // Wait until Factorio (or your target process) exits
     WaitForSingleObject(pi.hProcess, INFINITE);
 
-    // Optionally signal logger thread to exit (add flag, etc.)
-    logger.detach();
+    logger.detach(); // Don't wait for logger (console will close soon anyway)
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
     return 0;
